@@ -13,7 +13,7 @@ This project consists of two programs:
    - If the tile is missing, it requests the tile from the configured Tileserver-GL, saves it locally, then serves it.  
    This reduces redundant tile rendering and speeds up repeat requests.
 
-
+---
 
 ## Default Configuration
 
@@ -22,7 +22,7 @@ This project consists of two programs:
 - Zoom levels rendered: 0 to 17  
 - You can change these coordinates directly in the source code of the tile_requester to target other regions.
 
-
+---
 
 ## Installation on Ubuntu
 
@@ -30,28 +30,22 @@ This project consists of two programs:
 
 ```bash
 sudo apt update
-sudo apt install -y build-essential cmake libboost-all-dev libcurl4-openssl-dev
+sudo apt install -y build-essential libboost-all-dev libcurl4-openssl-dev
 ````
 
-2. **Build the tile\_requester:**
+2. **Compile tile\_requester:**
 
 ```bash
-mkdir build
-cd build
-cmake ../tile_requester
-make
+g++ -std=c++17 -pthread tile_requester.cpp -o tile_requester -lcurl
 ```
 
-3. **Build the tile\_cache server:**
+3. **Compile tile\_cache:**
 
 ```bash
-mkdir build_cache
-cd build_cache
-cmake ../tile_cache
-make
+g++ -std=c++17 -pthread tile_cache.cpp -o tile_cache -lcurl -lboost_system -lboost_thread
 ```
 
-
+---
 
 ## Usage
 
@@ -71,7 +65,7 @@ Example:
 
 This will request all tiles for the configured bounding box and zoom levels.
 
-
+---
 
 ### tile\_cache
 
@@ -87,6 +81,7 @@ The cache server listens on port 8080 and serves tiles at paths like:
 http://localhost:8080/{zoom}/{x}/{y}.png
 ```
 
+---
 
 ## How it works
 
@@ -94,7 +89,7 @@ http://localhost:8080/{zoom}/{x}/{y}.png
 * The **tile\_cache** serves tiles from local disk if available; if not, it fetches on-demand from the Tileserver-GL, caches, then serves.
 * This setup improves performance, reduces load on your tile server, and provides offline resilience.
 
-
+---
 
 ## Notes
 
@@ -103,4 +98,7 @@ http://localhost:8080/{zoom}/{x}/{y}.png
 * The system requires sufficient disk space to store cached tiles.
 * The cache server is multithreaded and optimized for concurrent requests.
 
+---
+
+Feel free to file issues or request features on GitHub!
 
