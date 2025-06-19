@@ -6,6 +6,7 @@
 #include <curl/curl.h>
 #include <thread>
 #include <vector>
+#include <string>
 
 namespace asio = boost::asio;
 namespace beast = boost::beast;
@@ -45,7 +46,7 @@ bool fetch_tile(const std::string& url, const std::string& local_path) {
     return true;
 }
 
-void handle_session(tcp::socket socket) {
+void handle_session(tcp::socket socket, const std::string& tile_server_base_url) {
     try {
         beast::flat_buffer buffer;
         http::request<http::string_body> req;
@@ -61,7 +62,6 @@ void handle_session(tcp::socket socket) {
             return;
         }
 
-        // <-- Fix applied here: construct std::string from string_view -->
         std::string target{ req.target().data(), req.target().size() };
 
         if (target.size() < 7 || target[0] != '/') {
@@ -104,7 +104,7 @@ void handle_session(tcp::socket socket) {
         std::string local_filename = zoom + "-" + x + "-" + y + ".png";
 
         if (!fs::exists(local_filename)) {
-            std::string remote_url = "https://tiles.leberkasrechner.de/styles/osm-bright/" + zoom + "/" + x + "/" + y + ".png";
+            std::string remote_url = tile_server_base_url + zoom + "/" + x + "/" + y + ".png";
 
             std::cout << "Fetching remote tile: " << remote_url << std::endl;
 
@@ -145,20 +145,31 @@ void handle_session(tcp::socket socket) {
     }
 }
 
-void do_accept(tcp::acceptor& acceptor, asio::io_context& ioc) {
-    acceptor.async_accept([&acceptor, &ioc](boost::system::error_code ec, tcp::socket socket) {
+void do_accept(tcp::acceptor& acceptor, asio::io_context& ioc, const std::string& tile_server_base_url) {
+    acceptor.async_accept([&acceptor, &ioc, &tile_server_base_url](boost::system::error_code ec, tcp::socket socket) {
         if (!ec) {
-            asio::post(ioc, [sock = std::move(socket)]() mutable {
-                handle_session(std::move(sock));
+            asio::post(ioc, [sock = std::move(socket), &tile_server_base_url]() mutable {
+                handle_session(std::move(sock), tile_server_base_url);
             });
         } else {
             std::cerr << "Accept error: " << ec.message() << std::endl;
         }
-        do_accept(acceptor, ioc);
+        do_accept(acceptor, ioc, tile_server_base_url);
     });
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+    if (argc != 2) {
+        std::cerr << "Usage: " << argv[0] << " <tile_server_base_url>\n";
+        std::cerr << "Example: " << argv[0] << " https://tileserver.example.com/styles/osm-bright/\n";
+        return 1;
+    }
+
+    std::string tile_server_base_url = argv[1];
+    if (tile_server_base_url.back() != '/') {
+        tile_server_base_url += '/';
+    }
+
     try {
         unsigned int n_threads = std::thread::hardware_concurrency();
         if (n_threads == 0) n_threads = 4;
@@ -166,9 +177,9 @@ int main() {
         asio::io_context ioc{static_cast<int>(n_threads)};
 
         tcp::acceptor acceptor{ioc, tcp::endpoint(tcp::v4(), 8080)};
-        std::cout << "Multithreaded server running on port 8080 with " << n_threads << " threads\n";
+        std::cout << "Multithreaded tile cache server running on port 8080 with " << n_threads << " threads\n";
 
-        do_accept(acceptor, ioc);
+        do_accept(acceptor, ioc, tile_server_base_url);
 
         std::vector<std::thread> threads;
         for (unsigned int i = 0; i < n_threads; ++i) {
