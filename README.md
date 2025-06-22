@@ -42,7 +42,7 @@ g++ -std=c++17 -pthread tile_requester.cpp -o tile_requester -lcurl
 3. **Compile tile\_cache:**
 
 ```bash
-g++ -std=c++17 -pthread tile_cache.cpp -o tile_cache -lcurl -lboost_system -lboost_thread
+g++ tile_cache_server.cpp -o tile_server -lboost_system -lboost_filesystem -lcurl -lpthread -std=c++17
 ```
 
 ---
