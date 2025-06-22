@@ -15,12 +15,10 @@ namespace fs = std::filesystem;
 
 using tcp = asio::ip::tcp;
 
-// Write callback for libcurl
 static size_t write_data(void* ptr, size_t size, size_t nmemb, FILE* stream) {
     return fwrite(ptr, size, nmemb, stream);
 }
 
-// Download tile from remote server
 bool fetch_tile(const std::string& url, const std::string& local_path) {
     CURL* curl = curl_easy_init();
     if (!curl) return false;
@@ -48,7 +46,6 @@ bool fetch_tile(const std::string& url, const std::string& local_path) {
     return true;
 }
 
-// Handle a single HTTP session
 void handle_session(tcp::socket socket, const std::string& tile_server_base_url) {
     try {
         beast::flat_buffer buffer;
@@ -67,7 +64,8 @@ void handle_session(tcp::socket socket, const std::string& tile_server_base_url)
 
         std::string target{req.target().data(), req.target().size()};
 
-        if (target.empty() || target[0] != '/' || !target.ends_with(".png")) {
+        if (target.empty() || target[0] != '/' ||
+            target.size() < 4 || target.substr(target.size() - 4) != ".png") {
             http::response<http::string_body> res{http::status::bad_request, req.version()};
             res.set(http::field::content_type, "text/plain");
             res.body() = "Invalid request path or extension\n";
@@ -76,15 +74,15 @@ void handle_session(tcp::socket socket, const std::string& tile_server_base_url)
             return;
         }
 
-        // Remove leading slash and construct local and remote paths
-        std::string relative_path = target.substr(1); // e.g. "12/345/678.png"
-        fs::path local_path = fs::path("cache") / relative_path;
+        // Remove leading slash, so "z/x/y.png"
+        std::string relative_path = target.substr(1);
+
+        fs::path local_path = relative_path;  // directly store in current dir + subdirs z/x/y.png
+
         std::string remote_url = tile_server_base_url + relative_path;
 
-        // Ensure local cache directory exists
         fs::create_directories(local_path.parent_path());
 
-        // Fetch tile if not cached
         if (!fs::exists(local_path)) {
             std::cout << "Fetching remote tile: " << remote_url << std::endl;
             if (!fetch_tile(remote_url, local_path.string())) {
@@ -99,7 +97,6 @@ void handle_session(tcp::socket socket, const std::string& tile_server_base_url)
             std::cout << "Serving cached tile: " << local_path << std::endl;
         }
 
-        // Read cached file
         std::ifstream file(local_path, std::ios::binary);
         if (!file) {
             http::response<http::string_body> res{http::status::internal_server_error, req.version()};
@@ -125,7 +122,6 @@ void handle_session(tcp::socket socket, const std::string& tile_server_base_url)
     }
 }
 
-// Accept incoming connections
 void do_accept(tcp::acceptor& acceptor, asio::io_context& ioc, const std::string& tile_server_base_url) {
     acceptor.async_accept([&acceptor, &ioc, &tile_server_base_url](boost::system::error_code ec, tcp::socket socket) {
         if (!ec) {
@@ -139,7 +135,6 @@ void do_accept(tcp::acceptor& acceptor, asio::io_context& ioc, const std::string
     });
 }
 
-// Entry point
 int main(int argc, char* argv[]) {
     if (argc != 2) {
         std::cerr << "Usage: " << argv[0] << " <tile_server_base_url>\n";
